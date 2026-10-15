@@ -58,12 +58,23 @@ Append a dated entry at the end of every phase.
   - Build/runtime checks — PASS: `typecheck` 0 errors, `lint` 0 findings, `test` 7/7, `build` OK, `smoke` 21/21, no console errors.
 - Known issues: JS bundle is 1.33 MB minified (three + R3F + Drei) → Vite >500 kB warning; to address in Phase 05 by lazy-loading the canvas. Sky is pale and the ground's square edge is visible in wide shots → Phase 04. Mobile landing crops the gopuram → Phase 04.
 
-## Phase 03 — Exploration
-- Status: NOT STARTED
-- Files changed:
-- Acceptance results:
-- Commands/checks and results:
-- Known issues:
+## Phase 03 — Exploration (2026-10-15)
+- Status: COMPLETE
+- Files changed: `src/data/landmarks.ts` (6 typed landmarks), `src/scene/{CameraRig,TempleModel,Hotspots,TempleCanvas}.tsx`, `src/components/{ExploreHud,LandmarkPanel,Header}.tsx`, `src/App.tsx`, `src/index.css`, `src/data/model.test.ts` (landmark ↔ GLB integrity), `tsconfig.test.json` (+ references; tests excluded from the app tsconfig), `scripts/smoke-scenarios.mjs`.
+- Implementation:
+  - Free exploration via Drei `CameraControls`: orbit (drag), dolly (wheel/pinch, `dollyToCursor`), truck (right-drag / two-finger), smooth damping; limits `minDistance 6`, `maxDistance 140`, `maxPolarAngle 0.47π` (never below the ground), orbit target clamped to a box around the compound. Keyboard: with the 3D view focused, arrows orbit, Shift+arrows pan, +/− zoom.
+  - Six landmarks (gopuram, gopuram crown & kalashas, dhvajastambha, mandapa, vimana, pushkarini), each bound to a named GLB node, with anchor, camera pose, general sourced description, a separate "In this model" note (fictional model, not a historical claim) and source links.
+  - Selection from: landmark list (desktop rail / mobile chips), numbered 3D markers (DOM buttons), clicking the model itself (raycast; drags ignored), and prev/next in the panel. Selection → emissive highlight on that node, smooth camera focus, panel. Close button, Escape, Reset view and Introduction keep state consistent (reducer unit-tested).
+  - While a landmark is focused only its marker is shown (markers are not depth-occluded). On narrow screens the camera's focal offset lifts the subject above the bottom-sheet panel.
+- Acceptance results (all from `npm run smoke`, headless Chrome 155 / SwiftShader, 48/48 checks):
+  - Orbit/zoom/pan/reset — PASS (canvas pixel Δ after drag 44.3, wheel 25.6, right-drag 8.0; reset returns to the same view Δ0.02; arrow keys Δ24.9).
+  - Each landmark visible/reachable and labelled — PASS (all 6 selected from the list; panel title matches; screenshots `10-landmark-1..6.png` reviewed; unit tests assert each anchor lies on its GLB node and no camera pose is inside a building's bounds).
+  - Selection updates highlight, camera, panel — PASS (aria-pressed state, panel title, canvas Δ30–73 per selection; clicking the 3D gopuram selects it; hotspot marker selects Vimana).
+  - Panel close and reselect — PASS (close button, Escape, next wraps around).
+  - Mobile touch and keyboard UI — PASS (chip tap opens panel; panel stays above the chip strip and below 35% of the viewport; all visible buttons ≥44 px; close by touch).
+  - No console errors/build failures — PASS (`typecheck` 0, `lint` 0, `test` 20/20, `build` OK).
+- Debugging notes: early canvas comparisons used byte equality and captured HTML overlays and hover highlights, which gave false failures; the smoke helper now hides overlays, parks the cursor, waits two frames and uses a mean pixel-difference metric (changed > 2, same < 0.6). Three r186 removed `PCFSoftShadowMap` (runtime warning) → switched to `PCFShadowMap`.
+- Known issues: markers are not occluded by geometry in free orbit (mitigated as above); `THREE.Clock` deprecation warning originates inside R3F (not app code).
 
 ## Phase 04 — Cinematic polish
 - Status: NOT STARTED

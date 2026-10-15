@@ -3,9 +3,56 @@
 const desktop = { width: 1440, height: 900 }
 const mobile = { width: 390, height: 844 }
 const READY_TIMEOUT = 90_000 // software WebGL in headless Chrome is slow
+const LANDMARK_TERMS = ['Gopuram', 'Shala crown & kalashas', 'Dhvajastambha', 'Mandapa', 'Vimana', 'Pushkarini']
 
 async function waitForScene(page, status = 'ready') {
   await page.locator(`[data-scene-status="${status}"]`).waitFor({ timeout: READY_TIMEOUT })
+}
+
+/** Screenshot of the 3D canvas only: HTML overlays (UI, hotspot markers) are hidden while capturing. */
+async function canvasShot(page) {
+  // Park the cursor in the sky so hiding the UI doesn't put it over a landmark (hover highlight).
+  await page.mouse.move(2, 2)
+  await page.evaluate(() => {
+    const style = document.createElement('style')
+    style.id = 'smoke-hide-ui'
+    style.textContent = 'header, main, .hotspot { visibility: hidden !important; }'
+    document.head.append(style)
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
+  const shot = await page.locator('canvas').screenshot()
+  await page.evaluate(() => document.getElementById('smoke-hide-ui')?.remove())
+  return shot
+}
+/** Mean absolute per-channel difference (0–255) between two PNG screenshots, computed in the page. */
+async function diff(page, a, b) {
+  return page.evaluate(
+    async ([x, y]) => {
+      const load = async (b64) => {
+        const img = new Image()
+        img.src = `data:image/png;base64,${b64}`
+        await img.decode()
+        const c = new OffscreenCanvas(img.width, img.height)
+        const ctx = c.getContext('2d')
+        ctx.drawImage(img, 0, 0)
+        return ctx.getImageData(0, 0, img.width, img.height).data
+      }
+      const [da, db] = await Promise.all([load(x), load(y)])
+      let sum = 0
+      for (let i = 0; i < da.length; i += 4) sum += Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2])
+      return sum / ((da.length / 4) * 3)
+    },
+    [a.toString('base64'), b.toString('base64')],
+  )
+}
+const CHANGED = 2 // mean difference above this = the view clearly moved
+const SAME = 0.6 // below this = visually the same view
+
+const panelTitle = (page) => page.locator('#landmark-title')
+
+async function enterExplore(page) {
+  await page.getByRole('button', { name: 'Explore the temple' }).click()
+  await page.getByRole('region', { name: 'Exploration' }).waitFor()
 }
 
 export const scenarios = [
@@ -22,8 +69,7 @@ export const scenarios = [
       await page.screenshot({ path: `${out}/00-loading-desktop.png` })
       await waitForScene(page)
       check('3D model loads and scene becomes ready', true, `${((Date.now() - t0) / 1000).toFixed(1)}s`)
-      const canvas = page.locator('canvas')
-      check('WebGL canvas present', (await canvas.count()) === 1)
+      check('WebGL canvas present', (await page.locator('canvas').count()) === 1)
       await page.waitForTimeout(2500)
       await page.screenshot({ path: `${out}/01-landing-desktop.png` })
 
@@ -40,19 +86,110 @@ export const scenarios = [
       await page.waitForTimeout(100)
       check('about dialog closes on Escape', !(await dialog.isVisible()))
 
-      await page.getByRole('button', { name: 'Explore the temple' }).click()
-      await page.getByRole('region', { name: 'Exploration' }).waitFor()
+      await enterExplore(page)
       check('CTA enters exploration mode', true)
       await page.waitForTimeout(3500)
       await page.screenshot({ path: `${out}/02-explore-desktop.png` })
-      await page.getByRole('button', { name: 'Back to introduction' }).click()
+      await page.getByRole('button', { name: 'Introduction', exact: true }).click()
       await title.waitFor()
       check('return to introduction works', await title.isVisible())
     },
   },
   {
+    id: 'explore-desktop',
+    name: 'Landmarks, camera and controls (desktop)',
+    viewport: desktop,
+    async run({ page, base, check, out }) {
+      await page.goto(base)
+      await waitForScene(page)
+      await enterExplore(page)
+      await page.waitForTimeout(3000)
+      const overview = await canvasShot(page)
+
+      const list = page.getByRole('navigation', { name: 'Landmarks' })
+      let previous = overview
+      for (const [i, term] of LANDMARK_TERMS.entries()) {
+        await list.getByRole('button', { name: new RegExp(`^${term}`) }).click()
+        await page.waitForTimeout(3200)
+        const titleText = await panelTitle(page).textContent()
+        const pressed = await list.locator('[aria-pressed="true"]').count()
+        const shot = await canvasShot(page)
+        const d = await diff(page, shot, previous)
+        check(`select "${term}": panel, highlight state and camera update`, titleText === term && pressed >= 1 && d > CHANGED, `Δ${d.toFixed(1)}`)
+        previous = shot
+        await page.screenshot({ path: `${out}/10-landmark-${i + 1}.png` })
+      }
+
+      // Panel sequence controls, close button and Escape
+      await page.getByRole('navigation', { name: 'Landmark sequence' }).getByRole('button', { name: /Gopuram/ }).click()
+      check('next button wraps to the first landmark', (await panelTitle(page).textContent()) === 'Gopuram')
+      await page.getByRole('button', { name: 'Close landmark panel' }).click()
+      check('close button hides the panel', (await panelTitle(page).count()) === 0)
+      await list.getByRole('button', { name: /Mandapa/ }).click()
+      await page.keyboard.press('Escape')
+      check('Escape hides the panel', (await panelTitle(page).count()) === 0)
+
+      // 3D hotspot marker (DOM button anchored in the scene)
+      await page.getByRole('button', { name: 'Vimana — Tower over the sanctum' }).click()
+      check('hotspot marker selects its landmark', (await panelTitle(page).textContent()) === 'Vimana')
+
+      // Reset returns to the overview and clears the selection
+      await page.getByRole('button', { name: 'Reset view' }).click()
+      await page.waitForTimeout(3200)
+      check('reset clears selection', (await panelTitle(page).count()) === 0)
+      const afterReset = await canvasShot(page)
+
+      // Mouse orbit, zoom and pan
+      const box = await page.locator('canvas').boundingBox()
+      const cx = box.x + box.width / 2
+      const cy = box.y + box.height / 2
+      await page.mouse.move(cx, cy)
+      await page.mouse.down()
+      await page.mouse.move(cx + 220, cy + 30, { steps: 12 })
+      await page.mouse.up()
+      await page.waitForTimeout(800)
+      const orbited = await canvasShot(page)
+      const dOrbit = await diff(page, orbited, afterReset)
+      check('mouse drag orbits the camera', dOrbit > CHANGED, `Δ${dOrbit.toFixed(1)}`)
+      await page.mouse.wheel(0, -600)
+      await page.waitForTimeout(1200)
+      const zoomed = await canvasShot(page)
+      const dZoom = await diff(page, zoomed, orbited)
+      check('mouse wheel zooms', dZoom > CHANGED, `Δ${dZoom.toFixed(1)}`)
+      await page.mouse.move(cx, cy)
+      await page.mouse.down({ button: 'right' })
+      await page.mouse.move(cx - 150, cy, { steps: 10 })
+      await page.mouse.up({ button: 'right' })
+      await page.waitForTimeout(800)
+      const dPan = await diff(page, await canvasShot(page), zoomed)
+      check('right-drag pans', dPan > CHANGED, `Δ${dPan.toFixed(1)}`)
+      await page.screenshot({ path: `${out}/11-free-orbit.png` })
+
+      await page.getByRole('button', { name: 'Reset view' }).click()
+      await page.waitForTimeout(3500)
+      const reset2 = await canvasShot(page)
+      const dReset = await diff(page, reset2, afterReset)
+      check('reset returns to the overview pose', dReset < SAME, `Δ${dReset.toFixed(2)} vs first reset`)
+
+      // Keyboard orbit when the canvas is focused
+      await page.locator('canvas').focus()
+      await page.keyboard.press('ArrowLeft')
+      await page.keyboard.press('ArrowLeft')
+      await page.waitForTimeout(1500)
+      const dKey = await diff(page, await canvasShot(page), reset2)
+      check('arrow keys orbit when the 3D view is focused', dKey > CHANGED, `Δ${dKey.toFixed(1)}`)
+
+      // Clicking the model itself selects the landmark under the cursor (gateway tower, right of centre)
+      await page.getByRole('button', { name: 'Reset view' }).click()
+      await page.waitForTimeout(3500)
+      await page.mouse.click(1075, 430)
+      await page.waitForTimeout(500)
+      check('clicking the 3D gopuram selects it', (await panelTitle(page).textContent().catch(() => null)) === 'Gopuram')
+    },
+  },
+  {
     id: 'landing-mobile',
-    name: 'Landing (mobile)',
+    name: 'Mobile layout and touch',
     viewport: mobile,
     context: { isMobile: true, hasTouch: true },
     async run({ page, base, check, out }) {
@@ -71,6 +208,44 @@ export const scenarios = [
       check('CTA works by touch', true)
       await page.waitForTimeout(3500)
       await page.screenshot({ path: `${out}/04-explore-mobile.png` })
+
+      const chips = page.getByRole('navigation', { name: 'Landmarks' })
+      await chips.getByRole('button', { name: /Vimana/ }).tap()
+      await page.waitForTimeout(3200)
+      check('tapping a landmark chip opens its panel', (await panelTitle(page).textContent()) === 'Vimana')
+      const panel = await page.getByRole('complementary').boundingBox()
+      const strip = await chips.boundingBox()
+      check('panel does not cover the landmark strip', panel.y + panel.height <= strip.y + 1, `${panel.y + panel.height} ≤ ${strip.y}`)
+      check('panel leaves the upper scene visible', panel.y > mobile.height * 0.35, `panel top ${Math.round(panel.y)}px`)
+      await page.screenshot({ path: `${out}/12-panel-mobile.png` })
+      const touchTargets = await page.$$eval('button', (els) =>
+        els.filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect()).filter((r) => r.height < 44 || r.width < 44).length,
+      )
+      check('all visible buttons are ≥44px touch targets', touchTargets === 0, `${touchTargets} undersized`)
+      await page.getByRole('button', { name: 'Close landmark panel' }).tap()
+      check('panel closes by touch', (await panelTitle(page).count()) === 0)
+    },
+  },
+  {
+    id: 'reduced-motion',
+    name: 'Reduced motion',
+    viewport: desktop,
+    context: { reducedMotion: 'reduce' },
+    async run({ page, base, check }) {
+      await page.goto(base)
+      await waitForScene(page)
+      await page.waitForTimeout(2000)
+      const a = await canvasShot(page)
+      await page.waitForTimeout(1200)
+      const dSway = await diff(page, a, await canvasShot(page))
+      check('landing camera sway is disabled', dSway < SAME, `Δ${dSway.toFixed(2)}`)
+      await enterExplore(page)
+      await page.getByRole('navigation', { name: 'Landmarks' }).getByRole('button', { name: /Mandapa/ }).click()
+      await page.waitForTimeout(400)
+      const b = await canvasShot(page)
+      await page.waitForTimeout(1500)
+      const dJump = await diff(page, b, await canvasShot(page))
+      check('camera focus jumps without a long transition', dJump < SAME, `Δ${dJump.toFixed(2)} between 0.4s and 1.9s`)
     },
   },
   {
@@ -106,9 +281,11 @@ export const scenarios = [
       await waitForScene(page, 'unsupported')
       check('unsupported state detected', true)
       check('no canvas rendered', (await page.locator('canvas').count()) === 0)
-      await page.getByRole('button', { name: 'Explore the temple' }).click()
+      await enterExplore(page)
       check('fallback notice explains 3D is unavailable', await page.getByText('3D unavailable').isVisible())
       await page.screenshot({ path: `${out}/06-no-webgl.png` })
+      await page.getByRole('navigation', { name: 'Landmarks' }).getByRole('button', { name: /Pushkarini/ }).click()
+      check('landmark descriptions still readable without WebGL', (await panelTitle(page).textContent()) === 'Pushkarini')
     },
   },
 ]

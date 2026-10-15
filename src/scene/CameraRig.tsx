@@ -1,7 +1,7 @@
 import { CameraControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { Box3, Vector3 } from 'three'
+import { Box3, MathUtils, Vector3 } from 'three'
 import { CAMERA_LIMITS, LANDING_POSE, OVERVIEW_POSE } from '../data/temple'
 import type { CameraPose } from '../data/types'
 import type { Mode } from '../state/exploration'
@@ -24,6 +24,10 @@ function lookAt(controls: CameraControls, pose: CameraPose, animate: boolean) {
   return controls.setLookAt(...pose.position, ...pose.target, animate)
 }
 
+const KEY_ROTATE = MathUtils.degToRad(12)
+const KEY_DOLLY = 8
+const KEY_TRUCK = 4
+
 /**
  * Owns all camera motion. React only tells it *what* to look at; transitions, damping and the
  * landing-shot sway happen imperatively inside camera-controls / useFrame (no per-frame React state).
@@ -31,7 +35,9 @@ function lookAt(controls: CameraControls, pose: CameraPose, animate: boolean) {
 export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigProps) {
   const ref = useRef<CameraControls>(null)
   const size = useThree((s) => s.size)
+  const getState = useThree((s) => s.get)
   const sway = useRef(0)
+  const exploring = mode === 'explore'
 
   // Limits and boundary are static.
   useEffect(() => {
@@ -47,7 +53,6 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
     const c = ref.current
     if (!c) return
     const animate = !reducedMotion
-    c.smoothTime = 0.9
     if (mode === 'landing') {
       sway.current = 0
       void lookAt(c, LANDING_POSE, animate && viewNonce > 0)
@@ -56,14 +61,49 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
     }
   }, [mode, focus, viewNonce, reducedMotion])
 
-  // Frame the landing shot so the temple sits beside the hero copy on wide screens.
+  // Compose around the HTML overlays: beside the hero copy on wide landing shots, and above the
+  // bottom-sheet panel when a landmark is focused on narrow screens.
   useEffect(() => {
     const c = ref.current
     if (!c) return
-    const wide = size.width >= 900
-    const offset = mode === 'landing' ? (wide ? [-9, 0, 0] : [0, -4, 0]) : [0, 0, 0]
-    void c.setFocalOffset(offset[0], offset[1], offset[2], !reducedMotion)
-  }, [mode, size.width, reducedMotion])
+    const wide = size.width >= 1024
+    let offset: [number, number, number] = [0, 0, 0]
+    if (mode === 'landing') offset = wide ? [-9, 0, 0] : [0, -4, 0]
+    else if (focus && !wide) offset = [0, -0.22 * new Vector3(...focus.position).distanceTo(new Vector3(...focus.target)), 0]
+    void c.setFocalOffset(...offset, !reducedMotion)
+  }, [mode, focus, size.width, reducedMotion])
+
+  // Keyboard orbit / zoom / pan when the canvas has focus (core controls are not mouse-only).
+  useEffect(() => {
+    const canvas = getState().gl.domElement
+    canvas.tabIndex = exploring ? 0 : -1
+    canvas.setAttribute('role', 'application')
+    canvas.setAttribute('aria-roledescription', '3D view')
+    canvas.setAttribute(
+      'aria-label',
+      'Temple 3D view. Arrow keys orbit, Shift plus arrow keys pan, plus and minus zoom.',
+    )
+    const onKey = (e: KeyboardEvent) => {
+      const c = ref.current
+      if (!c || !exploring) return
+      const animate = !reducedMotion
+      const k = e.key
+      if (e.shiftKey && k.startsWith('Arrow')) {
+        const dx = k === 'ArrowLeft' ? -KEY_TRUCK : k === 'ArrowRight' ? KEY_TRUCK : 0
+        const dy = k === 'ArrowUp' ? KEY_TRUCK : k === 'ArrowDown' ? -KEY_TRUCK : 0
+        void c.truck(dx, -dy, animate)
+      } else if (k === 'ArrowLeft') void c.rotate(-KEY_ROTATE, 0, animate)
+      else if (k === 'ArrowRight') void c.rotate(KEY_ROTATE, 0, animate)
+      else if (k === 'ArrowUp') void c.rotate(0, -KEY_ROTATE, animate)
+      else if (k === 'ArrowDown') void c.rotate(0, KEY_ROTATE, animate)
+      else if (k === '+' || k === '=') void c.dolly(KEY_DOLLY, animate)
+      else if (k === '-' || k === '_') void c.dolly(-KEY_DOLLY, animate)
+      else return
+      e.preventDefault()
+    }
+    canvas.addEventListener('keydown', onKey)
+    return () => canvas.removeEventListener('keydown', onKey)
+  }, [getState, exploring, reducedMotion])
 
   // Slow cinematic sway in the landing shot (disabled for reduced motion).
   useFrame((_, delta) => {
@@ -78,12 +118,13 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
     <CameraControls
       ref={ref}
       makeDefault
-      enabled={mode === 'explore'}
+      enabled={exploring}
+      smoothTime={0.9}
+      draggingSmoothTime={0.12}
       minDistance={CAMERA_LIMITS.minDistance}
       maxDistance={CAMERA_LIMITS.maxDistance}
       maxPolarAngle={CAMERA_LIMITS.maxPolarAngle}
       dollyToCursor
-      draggingSmoothTime={0.12}
     />
   )
 }

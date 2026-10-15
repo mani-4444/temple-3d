@@ -12,7 +12,7 @@ export function Header({ mode, onHome, onAbout }: HeaderProps) {
       <button
         type="button"
         onClick={onHome}
-        className="pointer-events-auto group flex items-center gap-3 rounded-full py-1 pr-2 text-left"
+        className="pointer-events-auto group flex min-h-11 items-center gap-3 rounded-full py-1 pr-2 text-left"
         aria-label={mode === 'explore' ? 'Sanatan — return to introduction' : 'Sanatan — home'}
       >
         <Mark />
@@ -23,12 +23,15 @@ export function Header({ mode, onHome, onAbout }: HeaderProps) {
 
       <nav aria-label="Primary" className="pointer-events-auto flex items-center gap-2">
         {mode === 'explore' && (
-          <button type="button" className="btn btn-ghost hidden sm:inline-flex" onClick={onHome}>
-            Introduction
+          <button type="button" className="btn btn-ghost px-4" onClick={onHome}>
+            <span aria-hidden="true">←</span>
+            <span className="sm:hidden">Intro</span>
+            <span className="hidden sm:inline">Introduction</span>
           </button>
         )}
-        <button type="button" className="btn btn-ghost" onClick={onAbout}>
-          About &amp; credits
+        <button type="button" className="btn btn-ghost px-4" onClick={onAbout}>
+          <span className="sm:hidden">About</span>
+          <span className="hidden sm:inline">About &amp; credits</span>
         </button>
       </nav>
     </header>

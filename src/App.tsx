@@ -1,11 +1,14 @@
 import { useGLTF, useProgress } from '@react-three/drei'
-import { useCallback, useReducer, useState } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import { AboutDialog } from './components/AboutDialog'
+import { ExploreHud } from './components/ExploreHud'
 import { Header } from './components/Header'
 import { Hero } from './components/Hero'
+import { LandmarkPanel } from './components/LandmarkPanel'
 import { NoWebGLNotice, NoWebGLPoster } from './components/NoWebGLNotice'
 import { ScenePlaceholder } from './components/ScenePlaceholder'
 import { ErrorNotice, LoadingOverlay } from './components/StatusOverlays'
+import { getLandmark } from './data/landmarks'
 import { TEMPLE_MODEL } from './data/temple'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import { hasWebGL } from './lib/webgl'
@@ -22,17 +25,29 @@ export default function App() {
   const { progress } = useProgress()
   const reducedMotion = useReducedMotion()
   const exploring = state.mode === 'explore'
+  const selected = getLandmark(state.selectedId)
 
   const onReady = useCallback(() => setStatus('ready'), [])
   const onError = useCallback((error: Error) => {
     console.warn('Temple model failed to load:', error.message)
     setStatus('error')
   }, [])
+  const select = useCallback((id: string) => dispatch({ type: 'select', id }), [])
   const retry = () => {
     useGLTF.clear(TEMPLE_MODEL.url)
     setStatus('loading')
     setAttempt((n) => n + 1)
   }
+
+  // Escape closes the landmark panel (the About dialog handles its own Escape).
+  useEffect(() => {
+    if (!state.selectedId || aboutOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') dispatch({ type: 'deselect' })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [state.selectedId, aboutOpen])
 
   const heroStatus =
     status === 'loading'
@@ -54,10 +69,10 @@ export default function App() {
           }`}
         >
           <TempleCanvas
-            mode={state.mode}
-            focus={null}
-            viewNonce={state.viewNonce}
+            state={state}
             reducedMotion={reducedMotion}
+            showHotspots={status === 'ready'}
+            onSelect={select}
             onReady={onReady}
             onError={onError}
           />
@@ -86,20 +101,30 @@ export default function App() {
 
         {exploring && (
           <section aria-label="Exploration" className="pointer-events-none absolute inset-0 z-20">
-            <div className="pointer-events-auto absolute bottom-6 left-4 flex flex-wrap gap-2 sm:left-8">
-              <button type="button" className="btn btn-ghost" onClick={() => dispatch({ type: 'resetView' })} disabled={status !== 'ready'}>
-                Reset view
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => dispatch({ type: 'exit' })}>
-                Back to introduction
-              </button>
-            </div>
+            <ExploreHud
+              selectedId={state.selectedId}
+              canReset={status === 'ready'}
+              onSelect={select}
+              onReset={() => dispatch({ type: 'resetView' })}
+            />
+            {selected && (
+              <LandmarkPanel
+                key={selected.id}
+                landmark={selected}
+                onSelect={select}
+                onClose={() => dispatch({ type: 'deselect' })}
+              />
+            )}
           </section>
         )}
 
-        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center p-4">
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-20 flex justify-center p-4 sm:top-24">
           {exploring && status === 'loading' && <LoadingOverlay progress={progress} />}
-          {status === 'error' && (
+          {exploring && status === 'unsupported' && !selected && <NoWebGLNotice />}
+        </div>
+
+        {status === 'error' && (
+          <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center p-4">
             <div className="pointer-events-auto">
               <ErrorNotice
                 title="The temple model didn’t load"
@@ -113,9 +138,8 @@ export default function App() {
                 missing from this deployment.
               </ErrorNotice>
             </div>
-          )}
-          {exploring && status === 'unsupported' && <NoWebGLNotice />}
-        </div>
+          </div>
+        )}
       </main>
 
       <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
