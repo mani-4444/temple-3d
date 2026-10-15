@@ -44,13 +44,19 @@ Append a dated entry at the end of every phase.
 - Commands/checks and results: `npm run smoke` → 12/12 checks passed (headless Chrome 155).
 - Known issues: none new.
 
-## Phase 02 — 3D scene
-- Status: NOT STARTED
-- Asset used:
-- Files changed:
+## Phase 02 — 3D scene (2026-10-15)
+- Status: COMPLETE
+- Asset used: `public/models/temple.glb` — original procedural model authored by `scripts/build-temple-model.mjs` (three.js geometry → `GLTFExporter` → glTF-Transform `dedup`/`prune`/`meshopt` with quantization). ~99.9k triangles, 10 top-level nodes, 10 materials (granite, stucco, sculpture, recess, gold, limewash, ochre, paving, earth, water), no image textures (vertex-colour variation × PBR colours). Raw 7.46 MB → **1.55 MB** compressed. Y-up, metres, gateway faces +Z, ~34 m tall gopuram.
+- Files changed: `scripts/build-temple-model.mjs`, `public/models/temple.glb`, `src/scene/{TempleCanvas,TempleModel,Lighting,CameraRig,SceneErrorBoundary}.tsx`, `src/data/{temple,types}.ts`, `src/data/model.test.ts`, `src/lib/webgl.ts`, `src/components/NoWebGLNotice.tsx`, `src/App.tsx`, `scripts/smoke-scenarios.mjs`, `package.json` (+ `@gltf-transform/*`, `meshoptimizer` dev deps).
+- Decisions: Drei `useGLTF(url, false, true)` — meshopt on, Draco off so no decoder is fetched from a CDN. Reflection environment built locally from `<Lightformer>`s (no HDRI download). Loading progress is real (`useProgress` from the three.js loading manager). Model errors are caught by `SceneErrorBoundary` → HTML error notice with a working retry (`useGLTF.clear` + remount). `hasWebGL()` gates the canvas; unsupported browsers get the placeholder/poster plus an explanatory notice.
 - Acceptance results:
-- Commands/checks and results:
-- Known issues:
+  - Real model loads and is visible from the initial camera — PASS (smoke: `data-scene-status="ready"` after 2.5 s in headless Chrome/SwiftShader; screenshots `01-landing-desktop.png`, `02-explore-desktop.png` reviewed).
+  - Materials present, orientation correct — PASS (gateway faces the camera, upright; materials named and coloured; unit test asserts nodes/materials). No image textures by design.
+  - Loading/failure states work — PASS (smoke: GLB request forced to 404 → alert "The temple model didn’t load"; "Try again" after unrouting → ready).
+  - Fallback useful — PASS (smoke: WebGL context creation blocked → `unsupported` state, no canvas, explanatory notice). Poster still image to be captured in Phase 04 once lighting is final.
+  - Asset source/licence recorded — PASS (`docs/ASSET_CREDITS.md`).
+  - Build/runtime checks — PASS: `typecheck` 0 errors, `lint` 0 findings, `test` 7/7, `build` OK, `smoke` 21/21, no console errors.
+- Known issues: JS bundle is 1.33 MB minified (three + R3F + Drei) → Vite >500 kB warning; to address in Phase 05 by lazy-loading the canvas. Sky is pale and the ground's square edge is visible in wide shots → Phase 04. Mobile landing crops the gopuram → Phase 04.
 
 ## Phase 03 — Exploration
 - Status: NOT STARTED
