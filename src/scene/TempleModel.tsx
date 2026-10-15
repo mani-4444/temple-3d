@@ -1,6 +1,6 @@
 import { useGLTF } from '@react-three/drei'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useLayoutEffect, useRef } from 'react'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Color, Mesh, MeshStandardMaterial, type Object3D } from 'three'
 import { LANDMARKS } from '../data/landmarks'
 import { TEMPLE_MODEL } from '../data/temple'
@@ -28,6 +28,7 @@ function landmarkIdOf(obj: Object3D | null): string | null {
 export function TempleModel({ selectedId, interactive, reducedMotion, onSelect, onReady }: TempleModelProps) {
   // Meshopt-compressed GLB; Draco is not used so no external decoder is fetched.
   const { scene } = useGLTF(TEMPLE_MODEL.url, false, true)
+  const invalidate = useThree((s) => s.invalidate)
   const hovered = useRef<string | null>(null)
   const landmarkMaterials = useRef(new Map<string, MeshStandardMaterial[]>())
 
@@ -60,19 +61,29 @@ export function TempleModel({ selectedId, interactive, reducedMotion, onSelect, 
     onReady()
   }, [scene, onReady])
 
+  // Selection changes must produce a frame even when the canvas renders on demand.
+  useEffect(() => invalidate(), [selectedId, interactive, invalidate])
+
   useFrame((_, delta) => {
     const k = reducedMotion ? 1 : 1 - Math.exp(-delta * 6)
+    let animating = false
     for (const [id, mats] of landmarkMaterials.current) {
       const target = id === selectedId ? 0.16 : interactive && id === hovered.current ? 0.07 : 0
-      // Per-frame three.js mutation is the intended R3F pattern (no React re-render).
-      // oxlint-disable-next-line react/immutability
-      for (const m of mats) m.emissiveIntensity += (target - m.emissiveIntensity) * k
+      for (const m of mats) {
+        const next = Math.abs(target - m.emissiveIntensity) < 0.002 ? target : m.emissiveIntensity + (target - m.emissiveIntensity) * k
+        if (next !== target) animating = true
+        // Per-frame three.js mutation is the intended R3F pattern (no React re-render).
+        // oxlint-disable-next-line react/immutability
+        m.emissiveIntensity = next
+      }
     }
+    if (animating) invalidate()
   })
 
   const setHover = (id: string | null) => {
     hovered.current = id
     document.body.style.cursor = id ? 'pointer' : ''
+    invalidate()
   }
 
   return (

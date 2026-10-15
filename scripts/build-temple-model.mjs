@@ -54,7 +54,7 @@ const MAT = {
   ochre: std('ochre', 0xb4492c, 0.88),
   paving: std('paving', 0x9d8a74, 0.95),
   earth: std('earth', 0x6e5640, 1),
-  water: std('water', 0x2c4a48, 0.06, 0.1),
+  water: std('water', 0x1d4a4f, 0.05, 0.35),
 }
 
 // --- Geometry collection --------------------------------------------------------------------
@@ -540,7 +540,7 @@ function prakara(x0, x1, z0, z1, gateHalf) {
 function ground(bounds, hole) {
   inNode('ground', () => {
     // Earth: a large square with a hole for the tank, built from four rectangles
-    const R = 130
+    const R = 420 // large enough that the far edge is lost in the fog
     const rects = [
       [-R, R, -R, hole.z0],
       [-R, R, hole.z1, R],

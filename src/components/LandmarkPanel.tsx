@@ -15,7 +15,7 @@ export function LandmarkPanel({ landmark, onSelect, onClose }: LandmarkPanelProp
   return (
     <aside
       aria-labelledby="landmark-title"
-      className="glass pointer-events-auto absolute inset-x-3 bottom-[5.25rem] z-30 flex max-h-[min(46dvh,30rem)] flex-col overflow-hidden rounded-2xl animate-[panel-in_500ms_var(--ease-cinematic)] lg:inset-x-auto lg:top-24 lg:right-6 lg:bottom-6 lg:max-h-none lg:w-[25rem]"
+      className="glass pointer-events-auto absolute inset-x-3 bottom-[5.25rem] z-30 flex max-h-[min(46dvh,30rem)] flex-col overflow-hidden rounded-2xl animate-[panel-in_500ms_var(--ease-cinematic)] md:right-auto md:w-[26rem] lg:inset-x-auto lg:top-24 lg:right-6 lg:bottom-6 lg:max-h-none lg:w-[25rem]"
     >
       <div className="flex items-start justify-between gap-3 px-5 pt-5 sm:px-6">
         <p className="eyebrow">

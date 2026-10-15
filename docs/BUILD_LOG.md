@@ -76,12 +76,22 @@ Append a dated entry at the end of every phase.
 - Debugging notes: early canvas comparisons used byte equality and captured HTML overlays and hover highlights, which gave false failures; the smoke helper now hides overlays, parks the cursor, waits two frames and uses a mean pixel-difference metric (changed > 2, same < 0.6). Three r186 removed `PCFSoftShadowMap` (runtime warning) → switched to `PCFShadowMap`.
 - Known issues: markers are not occluded by geometry in free orbit (mitigated as above); `THREE.Clock` deprecation warning originates inside R3F (not app code).
 
-## Phase 04 — Cinematic polish
-- Status: NOT STARTED
-- Files changed:
+## Phase 04 — Cinematic polish (2026-10-15)
+- Status: COMPLETE
+- Files changed: `src/scene/{Lighting,CameraRig,TempleModel,TempleCanvas,Hotspots}.tsx`, `src/data/temple.ts` (narrow landing/overview poses), `src/components/{LandmarkPanel,Header}.tsx`, `scripts/build-temple-model.mjs` (ground extended to ±420 m, water material) → `public/models/temple.glb` regenerated (still 1.55 MB), new `scripts/perf.mjs`, `scripts/capture-poster.mjs`, `public/images/temple-poster.jpg`, `scripts/smoke-scenarios.mjs`.
+- Changes:
+  - Atmosphere: replaced Drei `<Sky>` (pale/grey at this sun angle) with a small custom gradient sky shader (dusk zenith → amber horizon + sun glow) whose horizon colour equals the fog colour, so the ground plane dissolves into haze (the square ground edge is no longer visible). Sun lowered to ~14° for longer, warmer shadows.
+  - Particles: **deliberately not added** — the haze already carries the mood, and drifting particles would force continuous rendering for decoration (against the brief).
+  - Render loop: `frameloop="always"` only while the landing sway is animating; otherwise `demand` (camera-controls and the highlight fade invalidate while they move), so an idle exploration view renders nothing.
+  - Composition: dedicated portrait landing pose (whole gopuram above the hero copy); portrait overview looks down the temple axis; exploration widens the lens to 52° on portrait screens; focused subjects are lifted above the mobile bottom sheet; the panel is capped at 26 rem on tablets.
+  - Fallback: `temple-poster.jpg` (1600×1000, 100 KB) captured from the real scene on the GPU (`npm run capture:poster`) and shown when WebGL is unavailable.
 - Acceptance results:
-- Commands/checks and results:
-- Known issues:
+  - Cinematic mood consistent across states — PASS (screenshots reviewed: landing desktop/mobile/tablet, overview, all 6 focus shots, poster).
+  - UI legible and usable — PASS (panels/lists on a 72%-opaque blurred backdrop; hero sits on a vignette; smoke: panel fits viewport at 390×844, 820×1180, 1180×820 and 1440×900; ≥44 px targets on mobile).
+  - Reduced motion respected — PASS (smoke: landing frame Δ0.00 over 1.2 s; focus jump Δ0.00 between 0.4 s and 1.9 s; CSS transitions/animations disabled).
+  - No functional regressions — PASS (`npm run smoke` 57/57, `npm test` 20/20, typecheck/lint clean, build OK).
+  - Performance measured — PASS (`npm run perf`, headless Chrome on this machine's **Intel UHD Graphics (D3D11)**: 63 FPS during the continuously rendered landing shot (vsync-bound), 63 draw calls/frame and ~200k triangles/frame including the shadow pass, 18 MB JS heap, ready in 1.3 s from localhost. SwiftShader software rendering: 2.7 FPS — used for functional checks only).
+- Known issues: none new. Discrete-GPU and real mobile-device performance not measured (no device available).
 
 ## Phase 05 — Quality and release readiness
 - Status: NOT STARTED

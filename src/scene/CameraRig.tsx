@@ -1,8 +1,8 @@
 import { CameraControls } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { Box3, MathUtils, Vector3 } from 'three'
-import { CAMERA_LIMITS, LANDING_POSE, OVERVIEW_POSE } from '../data/temple'
+import { Box3, MathUtils, PerspectiveCamera, Vector3 } from 'three'
+import { CAMERA_LIMITS, LANDING_POSE, LANDING_POSE_NARROW, OVERVIEW_POSE, OVERVIEW_POSE_NARROW } from '../data/temple'
 import type { CameraPose } from '../data/types'
 import type { Mode } from '../state/exploration'
 
@@ -15,10 +15,8 @@ interface CameraRigProps {
   reducedMotion: boolean
 }
 
-const landingAzimuth = Math.atan2(
-  LANDING_POSE.position[0] - LANDING_POSE.target[0],
-  LANDING_POSE.position[2] - LANDING_POSE.target[2],
-)
+const azimuthOf = (pose: CameraPose) =>
+  Math.atan2(pose.position[0] - pose.target[0], pose.position[2] - pose.target[2])
 
 function lookAt(controls: CameraControls, pose: CameraPose, animate: boolean) {
   return controls.setLookAt(...pose.position, ...pose.target, animate)
@@ -38,6 +36,9 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
   const getState = useThree((s) => s.get)
   const sway = useRef(0)
   const exploring = mode === 'explore'
+  const narrow = size.width / size.height < 1
+  const landingPose = narrow ? LANDING_POSE_NARROW : LANDING_POSE
+  const overviewPose = narrow ? OVERVIEW_POSE_NARROW : OVERVIEW_POSE
 
   // Limits and boundary are static.
   useEffect(() => {
@@ -55,11 +56,11 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
     const animate = !reducedMotion
     if (mode === 'landing') {
       sway.current = 0
-      void lookAt(c, LANDING_POSE, animate && viewNonce > 0)
+      void lookAt(c, landingPose, animate && viewNonce > 0)
     } else {
-      void lookAt(c, focus ?? OVERVIEW_POSE, animate)
+      void lookAt(c, focus ?? overviewPose, animate)
     }
-  }, [mode, focus, viewNonce, reducedMotion])
+  }, [mode, focus, viewNonce, reducedMotion, landingPose, overviewPose])
 
   // Compose around the HTML overlays: beside the hero copy on wide landing shots, and above the
   // bottom-sheet panel when a landmark is focused on narrow screens.
@@ -68,10 +69,19 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
     if (!c) return
     const wide = size.width >= 1024
     let offset: [number, number, number] = [0, 0, 0]
-    if (mode === 'landing') offset = wide ? [-9, 0, 0] : [0, -4, 0]
-    else if (focus && !wide) offset = [0, -0.22 * new Vector3(...focus.position).distanceTo(new Vector3(...focus.target)), 0]
+    if (mode === 'landing') offset = wide ? [-9, 0, 0] : [0, 0, 0]
+    else if (focus && !wide) offset = [0, 0.16 * new Vector3(...focus.position).distanceTo(new Vector3(...focus.target)), 0]
     void c.setFocalOffset(...offset, !reducedMotion)
   }, [mode, focus, size.width, reducedMotion])
+
+  // Portrait screens are narrow horizontally: widen the lens while exploring so close-ups fit.
+  useEffect(() => {
+    const camera = getState().camera
+    if (!(camera instanceof PerspectiveCamera)) return
+    camera.fov = exploring && narrow ? 52 : 38
+    camera.updateProjectionMatrix()
+    getState().invalidate()
+  }, [getState, exploring, narrow])
 
   // Keyboard orbit / zoom / pan when the canvas has focus (core controls are not mouse-only).
   useEffect(() => {
@@ -110,7 +120,7 @@ export function CameraRig({ mode, focus, viewNonce, reducedMotion }: CameraRigPr
     const c = ref.current
     if (!c || mode !== 'landing' || reducedMotion || c.active) return
     sway.current += delta
-    const az = landingAzimuth + Math.sin(sway.current * 0.12) * 0.22
+    const az = azimuthOf(landingPose) + Math.sin(sway.current * 0.12) * 0.22
     void c.rotateTo(az, c.polarAngle, false)
   })
 

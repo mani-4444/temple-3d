@@ -226,6 +226,30 @@ export const scenarios = [
       check('panel closes by touch', (await panelTitle(page).count()) === 0)
     },
   },
+  ...[
+    { id: 'tablet-portrait', viewport: { width: 820, height: 1180 } },
+    { id: 'tablet-landscape', viewport: { width: 1180, height: 820 } },
+  ].map(({ id, viewport }) => ({
+    id,
+    name: `Tablet ${viewport.width}×${viewport.height}`,
+    viewport,
+    context: { hasTouch: true },
+    async run({ page, base, check, out }) {
+      await page.goto(base)
+      await waitForScene(page)
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
+      check('no horizontal overflow', !overflow)
+      await page.waitForTimeout(2000)
+      await page.screenshot({ path: `${out}/20-${id}-landing.png` })
+      await enterExplore(page)
+      await page.getByRole('navigation', { name: 'Landmarks' }).getByRole('button', { name: /^Gopuram/ }).click()
+      await page.waitForTimeout(3200)
+      check('landmark panel opens', (await panelTitle(page).textContent()) === 'Gopuram')
+      const panel = await page.getByRole('complementary').boundingBox()
+      check('panel fits in the viewport', panel.y >= 0 && panel.y + panel.height <= viewport.height && panel.x >= 0 && panel.x + panel.width <= viewport.width)
+      await page.screenshot({ path: `${out}/21-${id}-panel.png` })
+    },
+  })),
   {
     id: 'reduced-motion',
     name: 'Reduced motion',
@@ -281,6 +305,10 @@ export const scenarios = [
       await waitForScene(page, 'unsupported')
       check('unsupported state detected', true)
       check('no canvas rendered', (await page.locator('canvas').count()) === 0)
+      const poster = page.getByRole('img', { name: /Still image of the 3D temple model/ })
+      await poster.waitFor()
+      const posterWidth = await poster.evaluate((img) => img.complete && img.naturalWidth)
+      check('still poster of the model is shown instead', posterWidth > 0, `naturalWidth ${posterWidth}`)
       await enterExplore(page)
       check('fallback notice explains 3D is unavailable', await page.getByText('3D unavailable').isVisible())
       await page.screenshot({ path: `${out}/06-no-webgl.png` })

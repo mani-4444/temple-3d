@@ -24,6 +24,9 @@ export function TempleCanvas({ state, reducedMotion, showHotspots, onSelect, onR
   const focus = getLandmark(state.selectedId)?.camera ?? null
   return (
     <Canvas
+      // Continuous rendering only for the animated landing shot; otherwise render on demand
+      // (camera-controls and the highlight fade request frames while they move).
+      frameloop={state.mode === 'landing' && !reducedMotion ? 'always' : 'demand'}
       shadows={{ type: PCFShadowMap }}
       dpr={[1, 1.75]}
       camera={{ fov: 38, near: 0.5, far: 1500, position: [...LANDING_POSE.position] }}

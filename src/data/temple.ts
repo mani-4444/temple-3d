@@ -18,10 +18,22 @@ export const LANDING_POSE: CameraPose = {
   target: [2, 15, 4],
 }
 
+/** Establishing shot for portrait / narrow screens: further back so the whole gateway fits. */
+export const LANDING_POSE_NARROW: CameraPose = {
+  position: [-40, 4, 112],
+  target: [0, 3, 18],
+}
+
 /** Default exploration pose ("Reset view"). */
 export const OVERVIEW_POSE: CameraPose = {
   position: [-52, 38, 70],
   target: [0, 6, -4],
+}
+
+/** Overview for portrait screens: looks down the temple axis, gateway nearest, sanctum beyond. */
+export const OVERVIEW_POSE_NARROW: CameraPose = {
+  position: [16, 64, 92],
+  target: [0, 2, -6],
 }
 
 /** Limits for free exploration (metres / radians). */
