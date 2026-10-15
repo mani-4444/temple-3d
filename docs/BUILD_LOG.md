@@ -31,12 +31,18 @@ Append a dated entry at the end of every phase.
   - **Sketchfab downloads require a signed-in account / OAuth token.** Logging in or handling the user's credentials is out of bounds. → Fallback (per `ASSET_STRATEGY.md` hierarchy): author an **original, procedurally generated GLB** of a temple *inspired by* Dravidian architecture with a reproducible build script (`scripts/build-temple-model.mjs`). The project owns it outright, so licensing is unambiguous. It is a stylized, non-photogrammetric model and is documented as such (KI-001). The model URL and landmark data are isolated so a licensed Sketchfab model can be swapped in later.
 - Content sources for landmark text (general architectural definitions only, no claims about a specific real temple): Wikipedia — Gopuram, Dravidian architecture, Vimana (architectural feature), Mandapa, Dhvajastambha, Temple tank, Kalasha.
 
-## Phase 01 — Landing foundation
-- Status: NOT STARTED
-- Files changed:
+## Phase 01 — Landing foundation (2026-10-15)
+- Status: COMPLETE
+- Files changed: scaffolded from `npm create vite@latest -- --template react-ts` (configs copied only; repo README kept): `package.json`, `package-lock.json`, `tsconfig*.json`, `vite.config.ts` (+ Tailwind plugin), `.oxlintrc.json`, `.gitignore`, `index.html`, `public/favicon.svg`; new `src/main.tsx`, `src/index.css`, `src/App.tsx`, `src/state/exploration.ts` (+ test), `src/hooks/useReducedMotion.ts`, `src/components/{Header,Hero,AboutDialog,StatusOverlays,ScenePlaceholder}.tsx`, `scripts/smoke.mjs`, `scripts/smoke-scenarios.mjs`.
+- Notes: the template now ships **oxlint** (not ESLint) as `npm run lint`; kept as-is. Added scripts `typecheck`, `test`, `smoke`, `build:model`. Loading/error primitives (`LoadingOverlay`, `ErrorNotice`) are ready for Phase 02. The placeholder is a CSS/SVG backdrop (`ScenePlaceholder`) rendered where the canvas will go.
 - Acceptance results:
-- Commands/checks and results:
-- Known issues:
+  - Responsive at desktop and mobile — PASS (smoke: 1440×900 and 390×844 screenshots reviewed; no horizontal overflow at 390px; CTA 44px tall and on screen).
+  - CTA has real behaviour — PASS (smoke: click/tap switches to exploration mode; "Back to introduction" returns).
+  - Placeholder clearly replaceable — PASS (single `<ScenePlaceholder />` stage element in `App.tsx`).
+  - Keyboard navigable, focus visible — PASS (smoke: Tab reaches header control, `outline-style: solid`; About dialog opens and closes with Escape).
+  - lint/type/build — PASS (`npm run typecheck` exit 0, `npm run lint` 0 findings, `npm test` 4/4, `npm run build` OK, JS 227.7 kB / 71.6 kB gzip).
+- Commands/checks and results: `npm run smoke` → 12/12 checks passed (headless Chrome 155).
+- Known issues: none new.
 
 ## Phase 02 — 3D scene
 - Status: NOT STARTED
