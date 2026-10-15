@@ -93,11 +93,25 @@ Append a dated entry at the end of every phase.
   - Performance measured — PASS (`npm run perf`, headless Chrome on this machine's **Intel UHD Graphics (D3D11)**: 63 FPS during the continuously rendered landing shot (vsync-bound), 63 draw calls/frame and ~200k triangles/frame including the shadow pass, 18 MB JS heap, ready in 1.3 s from localhost. SwiftShader software rendering: 2.7 FPS — used for functional checks only).
 - Known issues: none new. Discrete-GPU and real mobile-device performance not measured (no device available).
 
-## Phase 05 — Quality and release readiness
-- Status: NOT STARTED
-- Commands/checks and results:
-- Browser verification:
-- Asset credits complete:
-- Local release readiness:
-- External actions awaiting approval:
-- Final summary:
+## Phase 05 — Quality and release readiness (2026-10-15)
+- Status: COMPLETE (local release readiness); deployment not performed
+- Files changed: `src/App.tsx` (lazy-loaded 3D chunk, progress via callback, retry recreates the lazy component), `src/scene/TempleCanvas.tsx` (`ProgressReporter`), `src/scene/cache.ts` (new), `src/scene/Hotspots.tsx` (accessible name includes the visible number), `src/components/AboutDialog.tsx` (exact font credits), `vite.config.ts` (`chunkSizeWarningLimit` for the lazy vendor chunk), `package.json` (`engines`, `axe-core` dev dependency, `perf`/`capture:poster` scripts), `scripts/smoke-scenarios.mjs` (axe-core audits, tablet viewports, poster check, overlay hiding via `display:none`), `README.md` (full rewrite of the one-line stub), `docs/ASSET_CREDITS.md`, `docs/KNOWN_ISSUES.md`, this log.
+- Audits:
+  - Dependencies: `npm audit` → 0 vulnerabilities. Runtime deps: react, react-dom, three, @react-three/fiber, @react-three/drei, two Fontsource fonts. Everything else is a dev tool.
+  - Bundle (evidence: build output): before, a single 1.34 MB / 369 kB gzip chunk. After lazy-loading the scene: entry **246 kB / 78 kB gzip** (landing UI), scene 120 kB / 37 kB gzip, three/R3F/Drei vendor 981 kB / 262 kB gzip (lazy), CSS 33 kB / 7 kB gzip. Model 1.55 MB, poster 100 kB.
+  - Accessibility: axe-core 4 (injected by the smoke test) on landing, About dialog, desktop explore + panel, mobile panel → **0 violations** after fixing one serious `label-content-name-mismatch` on the 3D markers.
+  - Secrets: no tracked `.env`/key files; `git grep` for key/secret/password/token assignments → none. No environment variables are needed, so no `.env.example` was added.
+  - Resource handling: the GLB is cached by `useGLTF`; retry clears the cache and remounts; landmark materials are cloned once (guarded by `userData`), so remounts don't leak clones.
+- Commands/checks and results (final run):
+  - `npm run typecheck` → exit 0.
+  - `npm run lint` (oxlint) → 0 warnings, 0 errors. Two warnings introduced during this phase were fixed rather than suppressed: `static-components` and `exhaustive-deps`.
+  - `npm test` → 2 files, 20/20 tests passed.
+  - `npm run build` → success.
+  - `npm run smoke` → **61/61** checks passed, three consecutive runs (headless Chrome 155, SwiftShader).
+  - `npm run perf` → Intel UHD Graphics (D3D11): ready 1.1 s, 68 FPS, 63 draw calls, 199,738 triangles/frame incl. shadows, 16 MB heap.
+  - `vite` dev server → `/` 200, `/models/temple.glb` 200 (1,627,188 bytes), `/src/main.tsx` 200.
+- Browser verification: automated only, in headless Google Chrome 155 on Windows 11 (SwiftShader for functional checks, the Intel GPU for perf/poster). It covers desktop 1440×900, tablet 820×1180 and 1180×820, and phone 390×844 with touch emulation; landing, CTA, About dialog, all 6 landmarks, list/marker/model-click selection, prev/next/close/Escape, mouse orbit/zoom/pan, keyboard orbit, reset, reduced motion, model 404 + retry, no-WebGL poster fallback, and axe audits. **Not verified:** Safari, Firefox, physical mobile devices, screen-reader walkthroughs (KI-003).
+- Asset credits complete: yes (`docs/ASSET_CREDITS.md`: original model, poster and logo; OFL fonts with licence verification; researched but unused CC BY candidates).
+- Local release readiness: READY. `npm ci && npm run build` produces a static `dist/` that can be served by any static host. Nothing was pushed, merged or deployed.
+- External actions awaiting approval: (1) push branch `feat/sanatan-mvp` / open a PR / merge to `main`; (2) choose and configure a static host and deploy `dist/`; (3) optionally, a human signed into Sketchfab downloads a CC BY model to replace the procedural one (KI-001).
+- Final summary: all six phases are complete with recorded evidence. The main limitation is visual fidelity: the temple is an original stylised procedural model (KI-001), because a licensed high-detail model could not be downloaded without an account.

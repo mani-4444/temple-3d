@@ -22,7 +22,7 @@ export function Hotspots({ selectedId, onSelect }: HotspotsProps) {
               type="button"
               onClick={() => onSelect(l.id)}
               aria-pressed={active}
-              aria-label={`${l.term} — ${l.role}`}
+              aria-label={`${i + 1} ${l.term} — ${l.role}`}
               className={`group relative flex size-11 items-center justify-center rounded-full transition-transform duration-300 ease-[var(--ease-cinematic)] hover:scale-110 ${
                 active ? 'scale-110' : ''
               }`}

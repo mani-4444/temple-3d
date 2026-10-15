@@ -1,4 +1,19 @@
 // Scenarios for scripts/smoke.mjs. Each scenario gets a fresh browser context.
+import { createRequire } from 'node:module'
+
+const axePath = createRequire(import.meta.url).resolve('axe-core/axe.min.js')
+
+/** Runs axe-core on the current page state; fails on serious/critical violations, reports the rest. */
+async function a11y(page, check, label) {
+  if (!(await page.evaluate(() => 'axe' in window))) await page.addScriptTag({ path: axePath })
+  const violations = await page.evaluate(async () => {
+    const r = await window.axe.run(document, { resultTypes: ['violations'] })
+    return r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.length }))
+  })
+  const blocking = violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
+  const summary = violations.map((v) => `${v.id}(${v.impact}×${v.nodes})`).join(', ') || 'none'
+  check(`axe: no serious/critical a11y violations — ${label}`, blocking.length === 0, summary)
+}
 
 const desktop = { width: 1440, height: 900 }
 const mobile = { width: 390, height: 844 }
@@ -16,7 +31,8 @@ async function canvasShot(page) {
   await page.evaluate(() => {
     const style = document.createElement('style')
     style.id = 'smoke-hide-ui'
-    style.textContent = 'header, main, .hotspot { visibility: hidden !important; }'
+    // display:none (not visibility) so the panels' backdrop-filter layers are removed entirely.
+    style.textContent = 'header, main, .hotspot { display: none !important; }'
     document.head.append(style)
     return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
   })
@@ -72,6 +88,7 @@ export const scenarios = [
       check('WebGL canvas present', (await page.locator('canvas').count()) === 1)
       await page.waitForTimeout(2500)
       await page.screenshot({ path: `${out}/01-landing-desktop.png` })
+      await a11y(page, check, 'landing')
 
       await page.keyboard.press('Tab')
       const focused = await page.evaluate(() => document.activeElement?.textContent?.trim() ?? '')
@@ -82,6 +99,7 @@ export const scenarios = [
       await page.getByRole('button', { name: 'About & credits' }).click()
       const dialog = page.getByRole('dialog', { name: 'Sanatan' })
       check('about dialog opens', await dialog.isVisible())
+      await a11y(page, check, 'about dialog')
       await page.keyboard.press('Escape')
       await page.waitForTimeout(100)
       check('about dialog closes on Escape', !(await dialog.isVisible()))
@@ -119,6 +137,8 @@ export const scenarios = [
         previous = shot
         await page.screenshot({ path: `${out}/10-landmark-${i + 1}.png` })
       }
+
+      await a11y(page, check, 'explore + landmark panel')
 
       // Panel sequence controls, close button and Escape
       await page.getByRole('navigation', { name: 'Landmark sequence' }).getByRole('button', { name: /Gopuram/ }).click()
@@ -218,6 +238,7 @@ export const scenarios = [
       check('panel does not cover the landmark strip', panel.y + panel.height <= strip.y + 1, `${panel.y + panel.height} ≤ ${strip.y}`)
       check('panel leaves the upper scene visible', panel.y > mobile.height * 0.35, `panel top ${Math.round(panel.y)}px`)
       await page.screenshot({ path: `${out}/12-panel-mobile.png` })
+      await a11y(page, check, 'mobile panel')
       const touchTargets = await page.$$eval('button', (els) =>
         els.filter((e) => e.offsetParent).map((e) => e.getBoundingClientRect()).filter((r) => r.height < 44 || r.width < 44).length,
       )

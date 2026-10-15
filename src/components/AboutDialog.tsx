@@ -61,8 +61,8 @@ export function AboutDialog({ open, onClose }: AboutDialogProps) {
               (<code className="text-sand">scripts/build-temple-model.mjs</code>).
             </li>
             <li>
-              Typefaces: Cormorant Garamond (Christian Thalmann) and Inter (Rasmus Andersson), SIL
-              Open Font License 1.1, via Fontsource.
+              Typefaces: Cormorant Garamond (The Cormorant Project Authors) and Inter (The Inter
+              Project Authors), SIL Open Font License 1.1, self-hosted via Fontsource.
             </li>
             <li>
               Built with React, Three.js, React Three Fiber and Drei (MIT).

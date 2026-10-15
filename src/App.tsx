@@ -1,5 +1,4 @@
-import { useGLTF, useProgress } from '@react-three/drei'
-import { useCallback, useEffect, useReducer, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useReducer, useState } from 'react'
 import { AboutDialog } from './components/AboutDialog'
 import { ExploreHud } from './components/ExploreHud'
 import { Header } from './components/Header'
@@ -9,20 +8,21 @@ import { NoWebGLNotice, NoWebGLPoster } from './components/NoWebGLNotice'
 import { ScenePlaceholder } from './components/ScenePlaceholder'
 import { ErrorNotice, LoadingOverlay } from './components/StatusOverlays'
 import { getLandmark } from './data/landmarks'
-import { TEMPLE_MODEL } from './data/temple'
 import { useReducedMotion } from './hooks/useReducedMotion'
 import { hasWebGL } from './lib/webgl'
-import { TempleCanvas } from './scene/TempleCanvas'
+import { SceneErrorBoundary } from './scene/SceneErrorBoundary'
 import { explorationReducer, initialExplorationState } from './state/exploration'
 
 type SceneStatus = 'loading' | 'ready' | 'error' | 'unsupported'
+
+const loadTempleCanvas = () => import('./scene/TempleCanvas').then((m) => ({ default: m.TempleCanvas }))
 
 export default function App() {
   const [state, dispatch] = useReducer(explorationReducer, initialExplorationState)
   const [aboutOpen, setAboutOpen] = useState(false)
   const [status, setStatus] = useState<SceneStatus>(() => (hasWebGL() ? 'loading' : 'unsupported'))
   const [attempt, setAttempt] = useState(0)
-  const { progress } = useProgress()
+  const [progress, setProgress] = useState(0)
   const reducedMotion = useReducedMotion()
   const exploring = state.mode === 'explore'
   const selected = getLandmark(state.selectedId)
@@ -33,8 +33,13 @@ export default function App() {
     setStatus('error')
   }, [])
   const select = useCallback((id: string) => dispatch({ type: 'select', id }), [])
-  const retry = () => {
-    useGLTF.clear(TEMPLE_MODEL.url)
+  // The 3D scene (three.js, R3F, Drei) is split into its own chunk so the landing UI paints first.
+  // "Try again" swaps in a fresh lazy component so a failed chunk download can recover too.
+  const [TempleCanvas, setTempleCanvas] = useState(() => lazy(loadTempleCanvas))
+  const retry = async () => {
+    await import('./scene/cache').then((m) => m.clearTempleModelCache()).catch(() => {})
+    setTempleCanvas(() => lazy(loadTempleCanvas))
+    setProgress(0)
     setStatus('loading')
     setAttempt((n) => n + 1)
   }
@@ -68,14 +73,19 @@ export default function App() {
             status === 'ready' ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <TempleCanvas
-            state={state}
-            reducedMotion={reducedMotion}
-            showHotspots={status === 'ready'}
-            onSelect={select}
-            onReady={onReady}
-            onError={onError}
-          />
+          <SceneErrorBoundary onError={onError}>
+            <Suspense fallback={null}>
+              <TempleCanvas
+                state={state}
+                reducedMotion={reducedMotion}
+                showHotspots={status === 'ready'}
+                onSelect={select}
+                onReady={onReady}
+                onError={onError}
+                onProgress={setProgress}
+              />
+            </Suspense>
+          </SceneErrorBoundary>
         </div>
       )}
 
@@ -129,7 +139,7 @@ export default function App() {
               <ErrorNotice
                 title="The temple model didn’t load"
                 actions={
-                  <button type="button" className="btn btn-primary" onClick={retry}>
+                  <button type="button" className="btn btn-primary" onClick={() => void retry()}>
                     Try again
                   </button>
                 }
