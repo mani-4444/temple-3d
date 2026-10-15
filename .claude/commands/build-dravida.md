@@ -1,0 +1,3 @@
+Continue the autonomous Dravida build from the current repository state.
+
+Read `CLAUDE.md`, `docs/IMPLEMENTATION_PLAN.md`, `docs/AUTONOMOUS_EXECUTION.md`, the relevant phase document, `docs/BUILD_LOG.md`, and `docs/KNOWN_ISSUES.md`. Inspect Git status and preserve user changes. Identify the first incomplete phase and execute it fully, including applicable verification and documentation. Continue through later phases if the current phase passes its exit criteria and time/context permit. Do not ask routine questions. Never push, merge, deploy, pay for assets/services, expose secrets, or perform destructive actions without explicit approval. Report actual checks and blockers; never fabricate results.
